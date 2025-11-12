@@ -3,26 +3,107 @@
 #include <fstream>
 #include <cstring>
 using namespace std;
-
-struct StackNode {
-    int x, y;           // 位置座標
-    int direction;      // 當前嘗試的方向 (0=右, 1=下, 2=左, 3=上)
-    StackNode* next;
+void ShowMenu() {
+  cout << "\n*** (^_^) Data Structure (^o^) ***\n";
+  cout << "*** Find the Goal(s) in a Maze ***\n";
+  cout << "* 0. Quit                        *\n";
+  cout << "* 1. Find one goal               *\n";
+  cout << "* 2. Find goal(s) as requested   *\n";
+  cout << "* 3. How many goals?             *\n";
+  cout << "* 4. Shortest path to one goal   *\n";
+  cout << "**********************************\n";
+  cout << "Input a command(0, 1, 2, 3, 4):  ";
+}
+void HandleInvalidInput(const string &message) {
+  cout << message << endl;
+  cin.clear();
+  cin.ignore(numeric_limits<streamsize>::max(), '\n');
+}
+int GetCommand() {
+  if (cin.peek() == '\n') {
+    cin.ignore();
+    return 0;
+  }
+  
+  int cmd;
+  while (true) {
     
-    StackNode(int _x, int _y) : x(_x), y(_y), direction(0), next(nullptr) {}
-};
-class Stack {
-private:
-    StackNode* top;
+    if (cin >> cmd && cmd >= 0 && cmd <= 4) {
+      char next = cin.peek();
+      while (next == ' ' || next == '\t') {
+        cin.get();
+        next = cin.peek();
+      }
+      
+      if (cin.peek() == '\n' || cin.peek() == EOF) {
+        
+        cin.ignore();
+        return cmd;
+      }
+    }
+    HandleInvalidInput("\nCommand does not exist!");
+    ShowMenu();
+  }
+}
+string getFileNumber() {
+    string input;
+    cout << "Input a file number: ";
     
-public:
-    Stack() : top(nullptr) {}
-    
-    ~Stack() {
-        while (!isEmpty()) {
-            pop();
+    while (true) {
+        getline(cin, input);
+        
+        // 去除前後空白
+        size_t start = input.find_first_not_of(" \t\r\n");
+        size_t end = input.find_last_not_of(" \t\r\n");
+        
+        if (start != string::npos) {
+            input = input.substr(start, end - start + 1);
+            return input;  // 有內容就回傳
         }
     }
+}
+int GetNumWithRange(int min, int max) {
+  cout << "\n";
+  cout << "Number of G (goals): ";
+  int num = 0;
+  while (!(cin >> num) || num < min || num > max) {
+      if (cin.fail()) {
+          // 清除 std::cin 的錯誤狀態
+          cin.clear();
+          // 忽略輸入緩衝區中的剩餘字元，直到換行符
+          // streamsize 是資料型別,用來存放字元數量或資料流大小
+          cin.ignore(numeric_limits<streamsize>::max(), '\n');
+      } else {
+          cout << "\n";
+          cout << "### The number must be in [" << min << ", " << max << "] ###" << endl;
+      
+      }
+      cout << "\n";
+    cout << "Number of G (goals): ";
+  }
+  return num;
+}
+
+struct StackNode {
+  int x, y;           // 位置座標
+  int direction;      // 當前嘗試的方向 (0=右, 1=下, 2=左, 3=上)
+  StackNode* next;
+    
+  StackNode(int _x, int _y) : x(_x), y(_y), direction(0), next(nullptr) {} // 初始化
+};
+
+class Stack {
+ private:
+  StackNode* top;
+    
+ public:
+  Stack() : top(nullptr) {}
+    
+  ~Stack() {
+    while (!isEmpty()) {
+      pop();
+    }
+  }
     
     void push(int x, int y) {
         StackNode* newNode = new StackNode(x, y);
@@ -73,11 +154,10 @@ public:
             delete[] grid;
         }
     }
-    
+  
     // 讀取迷宮檔案
-    bool readFromFile(int fileNum) {
-        char filename[20];
-        sprintf(filename, "input%d.txt", fileNum);
+    bool readFromFile(const string& fileNum) {
+      string filename = "input" + fileNum + ".txt";
         
         ifstream file(filename);
         if (!file.is_open()) {
@@ -90,10 +170,13 @@ public:
         
         // 動態配置2D陣列
         grid = new char*[height];
-        for (int i = 0; i < height; i++) {
-            grid[i] = new char[width + 1];  // +1 給字串結束符
-            file >> grid[i];
-        }
+              for (int i = 0; i < height; i++) {
+                  grid[i] = new char[width + 1];
+                  
+                  string line;
+                  file >> line;
+                  strcpy(grid[i], line.c_str());
+              }
         
         file.close();
         return true;
@@ -116,71 +199,249 @@ public:
         }
         return grid[y][x];
     }
-    
     // 設定某個位置的字符
     void setCell(int x, int y, char c) {
         if (x >= 0 && x < width && y >= 0 && y < height) {
             grid[y][x] = c;
         }
     }
-    
-    int getWidth() { return width; }
-    int getHeight() { return height; }
+  
+    // 拷貝
+    Maze* clone() const {
+      Maze* copy = new Maze();
+      copy->width = width;
+      copy->height = height;
+
+      copy->grid = new char*[height];
+      for (int i = 0; i < height; i++) {
+        copy->grid[i] = new char[width + 1];
+        strcpy(copy->grid[i], grid[i]);
+      }
+
+      return copy;
+    }
+  
+    bool isEmpty() const {
+      return (width <= 0 || height <= 0);
+  }
 };
 
+void markRoute(Stack& path, Maze& originalMaze, Maze* routeMaze) {
+    StackNode* node = path.peek();
+    
+    while (node != nullptr) {
+        int x = node->x;
+        int y = node->y;
+        
+        // 目標位置保持 G，其他位置標記為 R
+        if (originalMaze.getCell(x, y) == 'G') {
+          routeMaze->setCell(x, y, 'G');
+        } else {
+          routeMaze->setCell(x, y, 'R');
+        }
+        node = node->next;
+    }
+}
+void restoreGoals(Stack& path, Maze& originalMaze, Maze* visitedMaze) {
+    StackNode* node = path.peek();
+    while (node != nullptr) {
+        int x = node->x;
+        int y = node->y;
+        
+        // 如果原始是 G，改回 G
+        if (originalMaze.getCell(x, y) == 'G') {
+            visitedMaze->setCell(x, y, 'G');
+        }
+        
+        node = node->next;
+    }
+}
+int dx[] = {1, 0, -1, 0};  // 右, 下, 左, 上
+int dy[] = {0, 1, 0, -1};
 
+bool DFS_findGoals(Maze& originalMaze, Maze* visitedMaze, Maze* routeMaze, int targetGoals) {
+    Stack path;
+    int goalsFound = 0;
+    
+    // 將起點(0,0)加入Stack
+    path.push(0, 0);
+  
+    while (!path.isEmpty()) {
+        StackNode* top = path.peek();
+        int x = top->x;
+        int y = top->y;
+        
+        if (visitedMaze->getCell(x, y) == 'G') {
+          visitedMaze->setCell(x, y, 'V');
+          goalsFound++;
+          if (goalsFound >= targetGoals) {
+            restoreGoals(path, originalMaze, visitedMaze);
+            markRoute(path, originalMaze, routeMaze);
+              return true;
+            }
+        }
+  
+        if (visitedMaze->getCell(x, y) == 'E') {
+            visitedMaze->setCell(x, y, 'V');
+        }
+        
+        // 嘗試下一個方向
+        bool moved = false;
+        
+        while (top->direction < 4) {
+          int dir = top->direction;
+          int next_x = x + dx[dir];
+          int next_y = y + dy[dir];
+            top->direction++;
+            
+            // 檢查是否可走 (O(1) 檢查 visitedMaze)
+            char nextCell = visitedMaze->getCell(next_x, next_y);
+            
+            if (nextCell != 'V' && (nextCell == 'E' || nextCell == 'G')) {
+                path.push(next_x, next_y);
+                moved = true;
+                break;
+            }
+        }
+        
+        if (!moved) {
+            path.pop();
+        }
+    }
+  
+    restoreGoals(path, originalMaze, visitedMaze);
+    return false;
+}
+int DFS_countAllGoals(Maze& originalMaze, Maze* visitedMaze) {
+    Stack path;
+    int goalsFound = 0;
+    
+    // 將起點(0,0)加入Stack
+    path.push(0, 0);
+  
+    while (!path.isEmpty()) {
+        StackNode* top = path.peek();
+        int x = top->x;
+        int y = top->y;
+        
+        if (visitedMaze->getCell(x, y) == 'G') {
+          visitedMaze->setCell(x, y, 'V');
+          goalsFound++;
+        }
+  
+        if (visitedMaze->getCell(x, y) == 'E') {
+            visitedMaze->setCell(x, y, 'V');
+        }
+        
+        // 嘗試下一個方向
+        bool moved = false;
+        
+        while (top->direction < 4) {
+          int dir = top->direction;
+          int next_x = x + dx[dir];
+          int next_y = y + dy[dir];
+            top->direction++;
+            
+            // 檢查是否可走 (O(1) 檢查 visitedMaze)
+            char nextCell = visitedMaze->getCell(next_x, next_y);
+            
+            if (nextCell != 'V' && (nextCell == 'E' || nextCell == 'G')) {
+                path.push(next_x, next_y);
+                moved = true;
+                break;
+            }
+        }
+        
+        if (!moved) {
+            path.pop();
+        }
+    }
+  
+    restoreGoals(path, originalMaze, visitedMaze);
+    return goalsFound;
+}
 
+void Task1(Maze& originalMaze) {
+  Maze* visitedMaze = originalMaze.clone(); // 複製originalMaze給visitedMaze
+  Maze* routeMaze = originalMaze.clone(); // 複製originalMaze給routeMaze
 
+  if (DFS_findGoals(originalMaze, visitedMaze, routeMaze, 1)) {
+    visitedMaze->display();
+    routeMaze->display();
+  } else {
+    visitedMaze->display();
+  }
+  
+  delete visitedMaze;
+  delete routeMaze;
+}
 
+void Task2(Maze& originalMaze, int targetGoals) {
+  Maze* visitedMaze = originalMaze.clone(); // 複製originalMaze給visitedMaze
+  Maze* routeMaze = originalMaze.clone(); // 複製originalMaze給routeMaze
 
+  if (DFS_findGoals(originalMaze, visitedMaze, routeMaze, targetGoals)) {
+    visitedMaze->display();
+    routeMaze->display();
+  } else {
+    visitedMaze->display();
+  }
+  
+  delete visitedMaze;
+  delete routeMaze;
+}
 
+void Task3(Maze& originalMaze) {
+  Maze* visitedMaze = originalMaze.clone(); // 複製originalMaze給visitedMaze
 
+  int goalsFound = DFS_countAllGoals(originalMaze, visitedMaze);
+  visitedMaze->display();
+  cout << "The maze has " << goalsFound << "goal(s) in total." << endl;
+  
+  delete visitedMaze;
+}
 
-
-
-void HandleInvalidInput(const string &message) {
-  cout << message << endl;
-  cin.clear();
-  cin.ignore(numeric_limits<streamsize>::max(), '\n');
-} // 清理緩衝區
-void HandleCommand(int cmd) {
+void HandleCommand(int cmd, Maze originalMaze) {
   switch (cmd) {
-    case 1:
-      
+    case 1: {
+      string filenum = getFileNumber();
+      bool readSuccess = originalMaze.readFromFile(filenum);
+      if (readSuccess) {
+        Task1(originalMaze);
+      }
       break;
-    case 2:
-      
+    }
+    case 2: {
+      if (originalMaze.isEmpty()) {
+        cout << "\n### Execute command 1 to load a maze! ###" << endl;
+        break;
+      }
+      int targetGoals = GetNumWithRange(1, 100);
+      Task2(originalMaze, targetGoals);
       break;
-    case 3:
-     
+    }
+    case 3: {
+      if (originalMaze.isEmpty()) {
+        cout << "\n### Execute command 1 to load a maze! ###" << endl;
+        break;
+      }
+      Task3(originalMaze);
       break;
-    case 4:
-      
+    }
     case 0:
       break;
   }
 }
-void ShowMenu() {
-  cout << "\n*** (^_^) Data Structure (^o^) ***\n";
-  cout << "*** Find the Goal(s) in a Maze ***\n";
-  cout << "* 0. Quit                        *\n";
-  cout << "* 1. Find one goal               *\n";
-  cout << "* 2. Find goal(s) as requested   *\n";
-  cout << "* 3. How many goals?             *\n";
-  cout << "* 4. Shortest path to one goal   *\n";
-  cout << "**********************************\n";
-  cout << "Input a command(0, 1, 2, 3, 4):  ";
-}
 
-int GetCommand() {
-  if (cin.peek() == '\n') {
-    cin.ignore();
-    return 0;
-  }
-}
-int main(int argc, const char * argv[]) {
-  // insert code here...
-  std::cout << "Hello, World!\n";
+
+int main() {
+  Maze original;
+  int cmd;
+  do {
+    ShowMenu();
+    cmd = GetCommand();
+    HandleCommand(cmd, original);
+  } while (cmd != 0);
   return 0;
 }
 
