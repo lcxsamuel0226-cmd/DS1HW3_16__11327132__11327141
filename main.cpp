@@ -47,7 +47,7 @@ int GetCommand() {
 }
 string getFileNumber() {
     string input;
-    cout << "Input a file number: ";
+    cout << "\nInput a file number: ";
     
     while (true) {
         getline(cin, input);
@@ -288,11 +288,13 @@ bool DFS_findGoals(Maze& originalMaze, Maze* visitedMaze, Maze* routeMaze, int t
         // 嘗試下一個方向
         bool moved = false;
         
+        int startDir = path.peek()->next->direction; // 當前方向
+              
         while (top->direction < 4) {
-          int dir = top->direction;
+          int dir = (startDir + top->direction) % 4;
           int next_x = x + dx[dir];
           int next_y = y + dy[dir];
-            top->direction++;
+          top->direction++;
             
             // 檢查是否可走 (O(1) 檢查 visitedMaze)
             char nextCell = visitedMaze->getCell(next_x, next_y);
@@ -336,8 +338,10 @@ int DFS_countAllGoals(Maze& originalMaze, Maze* visitedMaze) {
         // 嘗試下一個方向
         bool moved = false;
         
+        int startDir = path.peek()->next->direction; // 當前方向
+      
         while (top->direction < 4) {
-          int dir = top->direction;
+          int dir = (startDir + top->direction) % 4;
           int next_x = x + dx[dir];
           int next_y = y + dy[dir];
             top->direction++;
@@ -401,7 +405,7 @@ void Task3(Maze& originalMaze) {
   delete visitedMaze;
 }
 
-void HandleCommand(int cmd, Maze originalMaze) {
+void HandleCommand(int cmd, Maze& originalMaze) {
   switch (cmd) {
     case 1: {
       string filenum = getFileNumber();
