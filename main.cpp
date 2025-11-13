@@ -12,7 +12,7 @@ void ShowMenu() {
   cout << "* 3. How many goals?             *\n";
   cout << "* 4. Shortest path to one goal   *\n";
   cout << "**********************************\n";
-  cout << "Input a command(0, 1, 2, 3, 4):  ";
+  cout << "Input a command(0, 1, 2, 3, 4): ";
 }
 void HandleInvalidInput(const string &message) {
   cout << message << endl;
@@ -22,7 +22,6 @@ void HandleInvalidInput(const string &message) {
 int GetCommand() {
   if (cin.peek() == '\n') {
     cin.ignore();
-    return 0;
   }
   
   int cmd;
@@ -75,7 +74,7 @@ int GetNumWithRange(int min, int max) {
           cin.ignore(numeric_limits<streamsize>::max(), '\n');
       } else {
           cout << "\n";
-          cout << "### The number must be in [" << min << ", " << max << "] ###" << endl;
+          cout << "### The number must be in [" << min << "," << max << "] ###" << endl;
       
       }
       cout << "\n";
@@ -85,11 +84,12 @@ int GetNumWithRange(int min, int max) {
 }
 
 struct StackNode {
-  int x, y;           // 位置座標
-  int direction;      // 當前嘗試的方向 (0=右, 1=下, 2=左, 3=上)
+  int x, y;
+  int direction; // 這個點走過幾種方向
+  int usedDir; // 用哪個方向到達這個點
   StackNode* next;
     
-  StackNode(int _x, int _y) : x(_x), y(_y), direction(0), next(nullptr) {} // 初始化
+  StackNode(int _x, int _y) : x(_x), y(_y), direction(0), usedDir(0), next(nullptr) {} // 初始化
 };
 
 class Stack {
@@ -190,6 +190,7 @@ public:
             }
             cout << endl;
         }
+      cout << "\n";
     }
     
     // 取得某個位置的字符
@@ -224,6 +225,9 @@ public:
     bool isEmpty() const {
       return (width <= 0 || height <= 0);
   }
+  
+  int getWidth() const { return width; }
+      int getHeight() const { return height; }
 };
 
 void markRoute(Stack& path, Maze& originalMaze, Maze* routeMaze) {
@@ -242,18 +246,15 @@ void markRoute(Stack& path, Maze& originalMaze, Maze* routeMaze) {
         node = node->next;
     }
 }
-void restoreGoals(Stack& path, Maze& originalMaze, Maze* visitedMaze) {
-    StackNode* node = path.peek();
-    while (node != nullptr) {
-        int x = node->x;
-        int y = node->y;
-        
-        // 如果原始是 G，改回 G
-        if (originalMaze.getCell(x, y) == 'G') {
-            visitedMaze->setCell(x, y, 'G');
+void restoreGoals(Maze& originalMaze, Maze* visitedMaze) {
+    for (int y = 0; y < originalMaze.getHeight(); y++) {
+        for (int x = 0; x < originalMaze.getWidth(); x++) {
+            if (originalMaze.getCell(x, y) == 'G' && visitedMaze->getCell(x, y) == 'V') {
+                
+              
+                visitedMaze->setCell(x, y, 'G');
+            }
         }
-        
-        node = node->next;
     }
 }
 int dx[] = {1, 0, -1, 0};  // 右, 下, 左, 上
@@ -275,7 +276,7 @@ bool DFS_findGoals(Maze& originalMaze, Maze* visitedMaze, Maze* routeMaze, int t
           visitedMaze->setCell(x, y, 'V');
           goalsFound++;
           if (goalsFound >= targetGoals) {
-            restoreGoals(path, originalMaze, visitedMaze);
+            restoreGoals(originalMaze, visitedMaze);
             markRoute(path, originalMaze, routeMaze);
               return true;
             }
@@ -287,11 +288,10 @@ bool DFS_findGoals(Maze& originalMaze, Maze* visitedMaze, Maze* routeMaze, int t
         
         // 嘗試下一個方向
         bool moved = false;
-        
-        int startDir = path.peek()->next->direction; // 當前方向
-              
+      int prevUsedDir = (top->next != nullptr) ? top->next->usedDir : top->usedDir;
+      
         while (top->direction < 4) {
-          int dir = (startDir + top->direction) % 4;
+          int dir = (prevUsedDir + top->direction) % 4;
           int next_x = x + dx[dir];
           int next_y = y + dy[dir];
           top->direction++;
@@ -300,6 +300,7 @@ bool DFS_findGoals(Maze& originalMaze, Maze* visitedMaze, Maze* routeMaze, int t
             char nextCell = visitedMaze->getCell(next_x, next_y);
             
             if (nextCell != 'V' && (nextCell == 'E' || nextCell == 'G')) {
+              top->usedDir = dir;
                 path.push(next_x, next_y);
                 moved = true;
                 break;
@@ -311,7 +312,7 @@ bool DFS_findGoals(Maze& originalMaze, Maze* visitedMaze, Maze* routeMaze, int t
         }
     }
   
-    restoreGoals(path, originalMaze, visitedMaze);
+    restoreGoals(originalMaze, visitedMaze);
     return false;
 }
 int DFS_countAllGoals(Maze& originalMaze, Maze* visitedMaze) {
@@ -338,10 +339,12 @@ int DFS_countAllGoals(Maze& originalMaze, Maze* visitedMaze) {
         // 嘗試下一個方向
         bool moved = false;
         
-        int startDir = path.peek()->next->direction; // 當前方向
+      int prevUsedDir = (top->next != nullptr) ? top->next->usedDir : top->usedDir;
+      
+       
       
         while (top->direction < 4) {
-          int dir = (startDir + top->direction) % 4;
+          int dir = (prevUsedDir + top->direction) % 4;
           int next_x = x + dx[dir];
           int next_y = y + dy[dir];
             top->direction++;
@@ -350,6 +353,7 @@ int DFS_countAllGoals(Maze& originalMaze, Maze* visitedMaze) {
             char nextCell = visitedMaze->getCell(next_x, next_y);
             
             if (nextCell != 'V' && (nextCell == 'E' || nextCell == 'G')) {
+              top->usedDir = dir;
                 path.push(next_x, next_y);
                 moved = true;
                 break;
@@ -361,7 +365,7 @@ int DFS_countAllGoals(Maze& originalMaze, Maze* visitedMaze) {
         }
     }
   
-    restoreGoals(path, originalMaze, visitedMaze);
+    restoreGoals(originalMaze, visitedMaze);
     return goalsFound;
 }
 
@@ -400,7 +404,7 @@ void Task3(Maze& originalMaze) {
 
   int goalsFound = DFS_countAllGoals(originalMaze, visitedMaze);
   visitedMaze->display();
-  cout << "The maze has " << goalsFound << "goal(s) in total." << endl;
+  cout << "The maze has " << goalsFound << " goal(s) in total." << endl;
   
   delete visitedMaze;
 }
