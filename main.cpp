@@ -137,6 +137,39 @@ class Stack {
         }
         return false;
     }
+    
+    void clone(const Stack& source) {
+            // 1. 清空當前堆疊 (目標堆疊)
+            while (!isEmpty()) {
+                pop();
+            }
+            
+            // 2. 為了保持路徑順序（從底層節點開始複製），我們需要一個臨時堆疊來反轉
+            Stack temp;
+            // 注意：作為成員函數，我們可以安全地訪問另一個 Stack 物件 (source) 的 private 成員 'top'
+            StackNode* current = source.top;
+            
+            // 將 source 逆序複製到 temp (從 top 到 bottom)
+            while (current != nullptr) {
+                temp.push(current->x, current->y);
+                // 由於 temp.peek() 是新的節點，我們必須手動設置其 usedDir
+                temp.peek()->usedDir = current->usedDir;
+                
+                current = current->next;
+            }
+            
+            // 3. 將 temp 逆序複製到當前堆疊 (*this)，以恢復正確順序
+            while (!temp.isEmpty()) {
+                StackNode* node = temp.peek();
+                
+                // 推入當前堆疊 (*this)
+                push(node->x, node->y);
+                // 由於 push 創建了新節點，我們也必須設置其 usedDir
+                peek()->usedDir = node->usedDir;
+                
+                temp.pop();
+            }
+        }
 };
 class Maze {
 private:
@@ -161,7 +194,7 @@ public:
         
         ifstream file(filename);
         if (!file.is_open()) {
-            cout << "### " << filename << " does not exist! ###" << endl;
+            cout << "\n" << filename << " does not exist!" << endl;
             return false;
         }
         
@@ -369,6 +402,80 @@ int DFS_countAllGoals(Maze& originalMaze, Maze* visitedMaze) {
     return goalsFound;
 }
 
+void DFS_findShortest(Maze& originalMaze, Maze* pathMaze, Maze* recordMaze,
+                      Stack& currentPath, int& shortestLength, Stack& bestPath) {
+    
+    // 取得當前節點資訊
+    StackNode* top = currentPath.peek();
+    int x = top->x;
+    int y = top->y;
+
+    // 計算當前路徑長度 (節點數)
+    int currentLength = 0;
+    StackNode* node = currentPath.peek();
+    while (node != nullptr) {
+        currentLength++;
+        node = node->next;
+    }
+
+    // 1. 修剪 (Pruning): 如果當前長度已達到或超過目前最短長度，則停止探索此分支
+    if (currentLength >= shortestLength) {
+        return;
+    }
+
+    // 2. 永久記錄 (Record): 在 recordMaze 中標記為 'V'，永不恢復
+    // 確保只標記 E 點，不覆蓋 'G' 或 'O'
+    char cell_in_record = recordMaze->getCell(x, y);
+    if (cell_in_record == 'E') {
+        recordMaze->setCell(x, y, 'V');
+    }
+
+    // 3. 找到目標 ('G'): 更新最短路徑並記錄
+    if (originalMaze.getCell(x, y) == 'G') {
+        shortestLength = currentLength;
+        bestPath.clone(currentPath); // 使用 Stack::deepCopy
+        
+        // 已經找到一個最短答案，可以終止此分支的探索
+        return;
+    }
+
+    // 4. 探索時的臨時標記 (Marking): 在 pathMaze 中標記為 'V'，避免當前路徑循環
+    char original_char = pathMaze->getCell(x, y);
+    if (original_char == 'E') {
+        pathMaze->setCell(x, y, 'V'); // 臨時標記
+    }
+    
+    // 5. 探索四個方向 (遞迴)
+    // 獲取前一個節點的方向，用於旋轉方向 (起點時為 0)
+    int prevUsedDir = (top->next != nullptr) ? top->next->usedDir : 0;
+
+    for (int i = 0; i < 4; i++) {
+        int dir = (prevUsedDir + i) % 4; // 依序檢查 4 個方向
+        int next_x = x + dx[dir];
+        int next_y = y + dy[dir];
+
+        // 檢查路徑連通性時，使用 pathMaze (臨時訪問狀態)
+        char nextCell = pathMaze->getCell(next_x, next_y);
+
+        // 檢查是否可走：非障礙、非邊界、且非當前臨時路徑中的 'V'
+        if (nextCell != 'V' && (nextCell == 'E' || nextCell == 'G')) {
+            // 推進 (Push)
+            currentPath.push(next_x, next_y);
+            currentPath.peek()->usedDir = dir;
+
+            // 遞迴呼叫：繼續深入
+            DFS_findShortest(originalMaze, pathMaze, recordMaze, currentPath, shortestLength, bestPath);
+
+            // 回溯 (Pop)：探索完畢，返回上一節點
+            currentPath.pop();
+        }
+    }
+
+    // 6. 恢復 (Restoration): 僅在 pathMaze 中恢復，保持探索能力
+    if (original_char == 'E') {
+        pathMaze->setCell(x, y, 'E');
+    }
+}
 void Task1(Maze& originalMaze) {
   Maze* visitedMaze = originalMaze.clone(); // 複製originalMaze給visitedMaze
   Maze* routeMaze = originalMaze.clone(); // 複製originalMaze給routeMaze
@@ -409,36 +516,78 @@ void Task3(Maze& originalMaze) {
   delete visitedMaze;
 }
 
+void Task4(Maze& originalMaze) {
+    Maze* visitedMaze = originalMaze.clone();
+    Maze* routeMaze = originalMaze.clone();
+    Maze* recordMaze = originalMaze.clone();
+    
+    Stack currentPath;
+    Stack bestPath;
+    const int NO_PATH = 999999;
+    int shortestLength = NO_PATH;
+    
+    // 將起點 (0, 0) 加入路徑
+    currentPath.push(0, 0);
+    
+    // 執行 DFS 尋找最短路徑
+    DFS_findShortest(originalMaze, visitedMaze, recordMaze, currentPath, shortestLength, bestPath);
+    
+    // 在顯示 visitedMaze 之前，恢復目標點的 'G' 標記
+    restoreGoals(originalMaze, recordMaze);
+    
+    if (shortestLength != NO_PATH) {
+        // 找到路徑
+        recordMaze->display();
+        markRoute(bestPath, originalMaze, routeMaze);
+        routeMaze->display();
+        cout << "Shortest path length = " << shortestLength << endl;
+    } else {
+        recordMaze->display();
+        cout << "\n### There is no path to find a goal! ### " << endl;
+    }
+    
+    delete visitedMaze;
+    delete routeMaze;
+}
+
 void HandleCommand(int cmd, Maze& originalMaze) {
-  switch (cmd) {
-    case 1: {
-      string filenum = getFileNumber();
-      bool readSuccess = originalMaze.readFromFile(filenum);
-      if (readSuccess) {
-        Task1(originalMaze);
-      }
-      break;
+    switch (cmd) {
+        case 1: {
+            string filenum = getFileNumber();
+            bool readSuccess = originalMaze.readFromFile(filenum);
+            if (readSuccess) {
+                Task1(originalMaze);
+            }
+            break;
+        }
+        case 2: {
+            if (originalMaze.isEmpty()) {
+                cout << "\n### Execute command 1 to load a maze! ###" << endl;
+                break;
+            }
+            int targetGoals = GetNumWithRange(1, 100);
+            Task2(originalMaze, targetGoals);
+            break;
+        }
+        case 3: {
+            if (originalMaze.isEmpty()) {
+                cout << "\n### Execute command 1 to load a maze! ###" << endl;
+                break;
+            }
+            Task3(originalMaze);
+            break;
+        }
+        case 4: { // 修正 Task 4 的邏輯，讓它先讀取檔案
+            string filenum = getFileNumber();
+            bool readSuccess = originalMaze.readFromFile(filenum); // 讀取新的迷宮
+            if (readSuccess) {
+                Task4(originalMaze);
+            }
+            break;
+        }
+        case 0:
+            break;
     }
-    case 2: {
-      if (originalMaze.isEmpty()) {
-        cout << "\n### Execute command 1 to load a maze! ###" << endl;
-        break;
-      }
-      int targetGoals = GetNumWithRange(1, 100);
-      Task2(originalMaze, targetGoals);
-      break;
-    }
-    case 3: {
-      if (originalMaze.isEmpty()) {
-        cout << "\n### Execute command 1 to load a maze! ###" << endl;
-        break;
-      }
-      Task3(originalMaze);
-      break;
-    }
-    case 0:
-      break;
-  }
 }
 
 
