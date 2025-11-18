@@ -277,7 +277,8 @@ void restoreGoals(Maze& originalMaze, Maze* visitedMaze) {
 int dx[] = {1, 0, -1, 0};  // 右, 下, 左, 上
 int dy[] = {0, 1, 0, -1};
 
-bool DFS_findGoals(Maze& originalMaze, Maze* visitedMaze, Maze* routeMaze, int targetGoals) {
+bool DFS_findGoals(Maze& originalMaze, Maze* visitedMaze
+                  , Maze* routeMaze, int targetGoals) {
   Stack path;
   int goalsFound = 0;
     
@@ -377,7 +378,9 @@ int DFS_countAllGoals(Maze& originalMaze, Maze* visitedMaze) {
   restoreGoals(originalMaze, visitedMaze);
   return goalsFound;
 }
-void DFS_findShortest(Maze& originalMaze, Maze* visitedMaze, Maze* lameloMaze, Stack& currentPath, Stack& bestPath, int& shortestLength) {
+
+void DFS_findShortest(Maze& originalMaze, Maze* visitedMaze, Maze* lameloMaze,
+                      Stack& currentPath, Stack& bestPath, int& shortestLength) {
     
   StackNode* top = currentPath.peek();
   int x = top->x;
